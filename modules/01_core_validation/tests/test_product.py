@@ -111,6 +111,17 @@ def test_rechaza_descripcion_larga():
             descripcion= "x"*5001
         )
 
+def test_rechaza_descripcion_vacia():
+    with pytest.raises(ValidationError):
+        Producto(
+            id=1,
+            precio=Decimal("10.00"),
+            nombre="Pepino",
+            marca="Huerta",
+            tipo="verdura",
+            descripcion= " "
+        )
+
 @pytest.mark.parametrize(
     "nombre",
     ["x"*101, ""],
@@ -160,3 +171,14 @@ def test_acepta_marca_limite():
         tipo="verdura",
     )
     assert producto.marca == "x"*50
+
+def test_rechaza_tipo_vacio():
+    with pytest.raises(ValidationError):
+        Producto(
+            id=1,
+            precio=Decimal("10.00"),
+            nombre="Pepino",
+            marca="Huerta",
+            tipo="",
+            descripcion= "x"*50
+        )
