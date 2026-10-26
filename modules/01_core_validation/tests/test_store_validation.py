@@ -6,7 +6,7 @@ from core_validation.product import Producto
 from core_validation.store_validation import validar_producto_para_tienda
 
 
-def test_acepta_categoria_permitida_por_tienda():
+def test_acepta_categoria_permitida_por_tienda()-> None:
     producto = Producto(
         id=1,
         precio=Decimal("10.00"),
@@ -18,7 +18,7 @@ def test_acepta_categoria_permitida_por_tienda():
     validar_producto_para_tienda(producto, {"frutas y verdura", "charcuteria"})
 
 
-def test_rechaza_categoria_no_permitida_por_tienda():
+def test_rechaza_categoria_no_permitida_por_tienda()-> None:
     producto = Producto(
         id=1,
         precio=Decimal("10.00"),
