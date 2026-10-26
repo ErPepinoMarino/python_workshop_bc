@@ -1,2 +1,2 @@
-def main() -> None:
-    print("Hello from core-validation!")
+from .product import Producto
+from .store_validation import validar_producto_para_tienda
