@@ -1,0 +1,25 @@
+[project]
+name = "api-layer"
+version = "0.1.0"
+description = "Isolated FastAPI gateway with mock responses and OpenAPI documentation"
+readme = "README.md"
+authors = [
+    { name = "ErPepinoMarino", email = "50591360+ErPepinoMarino@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.0",
+    "pydantic>=2,<3",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.16,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+]
