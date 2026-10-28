@@ -1,19 +1,12 @@
 from fastapi import FastAPI
 
-from api_layer.schemas import HealthResponse, ProductoCreate, ProductoResponse
+from api_layer.products import router as products_router
+from api_layer.schemas import HealthResponse
 
 app = FastAPI(title="API Layer")
+app.include_router(products_router)
 
 
 @app.get("/health")
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
-
-
-@app.post("/products", response_model=ProductoResponse, status_code=201)
-def crear_producto(payload: ProductoCreate) -> ProductoResponse:
-    return ProductoResponse(
-        id=1,
-        nombre=payload.nombre,
-        precio=payload.precio,
-    )

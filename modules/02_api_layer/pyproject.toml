@@ -26,3 +26,5 @@ dev = [
 
 [tool.ruff]
 src = ["src"]
+[tool.ruff.lint.isort]
+known-first-party = ["api_layer"]
