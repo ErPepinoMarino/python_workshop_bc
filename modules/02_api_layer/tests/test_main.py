@@ -33,3 +33,12 @@ def test_list_products_returns_mock() -> None:
 
     assert response.status_code == 200
     assert response.json() == [{"id": 1, "nombre": "Pepino", "precio": "1.00"}]
+
+
+def test_list_products_usa_repositorio_inyectado(
+    cliente_con_repo_falso: TestClient,
+) -> None:
+    response = cliente_con_repo_falso.get("/products")
+
+    assert response.status_code == 200
+    assert response.json() == [{"id": 99, "nombre": "Falso", "precio": "2.50"}]
