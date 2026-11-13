@@ -24,5 +24,12 @@ def test_post_rechaza_precio_cero() -> None:
         "/products",
         json={"nombre": "Pepino", "precio": "0"},
     )
-
     assert response.status_code == 422
+
+
+def test_list_products_returns_mock() -> None:
+    client = TestClient(app)
+    response = client.get("/products")
+
+    assert response.status_code == 200
+    assert response.json() == [{"id": 1, "nombre": "Pepino", "precio": "1.00"}]
