@@ -42,3 +42,12 @@ def test_list_products_usa_repositorio_inyectado(
 
     assert response.status_code == 200
     assert response.json() == [{"id": 99, "nombre": "Falso", "precio": "2.50"}]
+
+
+def test_get_producto_inexistente_devuelve_404(
+    cliente_con_repo_falso: TestClient,
+) -> None:
+    response = cliente_con_repo_falso.get("/products/999")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Producto 999 no encontrado"}
