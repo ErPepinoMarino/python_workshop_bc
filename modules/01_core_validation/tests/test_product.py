@@ -1,6 +1,8 @@
 from decimal import Decimal
+
 import pytest
 from pydantic import ValidationError
+
 from core_validation.product import Producto
 
 

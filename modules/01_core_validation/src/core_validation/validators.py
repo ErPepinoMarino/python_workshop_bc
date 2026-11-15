@@ -1,5 +1,7 @@
 from typing import Annotated
+
 from pydantic import AfterValidator
+
 
 def no_vacio(value: str) -> str:
     if not value.strip():

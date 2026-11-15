@@ -1,6 +1,10 @@
 from decimal import Decimal
+
 from pydantic import BaseModel, Field
+
 from .validators import NoVacio
+
+
 class Producto(BaseModel):
     id: int = Field(ge=0)
     precio: Decimal = Field(
