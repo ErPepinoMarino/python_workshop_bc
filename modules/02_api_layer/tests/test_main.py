@@ -51,3 +51,18 @@ def test_get_producto_inexistente_devuelve_404(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Producto 999 no encontrado"}
+
+
+def test_middleware_genera_request_id() -> None:
+    client = TestClient(app)
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers["x-request-id"]
+
+
+def test_middleware_respeta_request_id() -> None:
+    client = TestClient(app)
+    response = client.get("/health", headers={"x-request-id": "abc-123"})
+
+    assert response.headers["x-request-id"] == "abc-123"
