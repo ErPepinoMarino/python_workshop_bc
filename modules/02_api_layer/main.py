@@ -1,6 +1,9 @@
+import uuid
+
 from fastapi import FastAPI
 from fastapi.requests import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.middleware.base import RequestResponseEndpoint
 
 from api_layer.errors import ProductoNoEncontrado
 from api_layer.products import router as products_router
@@ -8,6 +11,17 @@ from api_layer.schemas import HealthResponse
 
 app = FastAPI(title="API Layer")
 app.include_router(products_router)
+
+
+@app.middleware("http")
+async def correlacion(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
+    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
+    response = await call_next(request)
+    response.headers["x-request-id"] = request_id
+    return response
 
 
 @app.get("/health")
