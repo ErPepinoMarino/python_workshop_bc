@@ -72,3 +72,10 @@ def test_openapi_documenta_404() -> None:
     responses = app.openapi()["paths"]["/products/{producto_id}"]["get"]["responses"]
 
     assert "404" in responses
+
+
+def test_middleware_cabecera_vacia() -> None:
+    client = TestClient(app)
+    response = client.get("/health", headers={"x-request-id": ""})
+
+    assert response.headers["x-request-id"] != ""
