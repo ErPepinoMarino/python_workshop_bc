@@ -7,6 +7,10 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class ErrorResponse(BaseModel):
+    detail: str
+
+
 class ProductoCreate(BaseModel):
     nombre: str = Field(min_length=1, max_length=100)
     precio: Decimal = Field(gt=0, le=10_000_000)
