@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from api_layer.errors import ProductoNoEncontrado
 from api_layer.repositories import ProductoRepository, obtener_repositorio
-from api_layer.schemas import ProductoCreate, ProductoResponse
+from api_layer.schemas import ErrorResponse, ProductoCreate, ProductoResponse
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -25,7 +25,11 @@ def listar_productos(
     return repo.listar()
 
 
-@router.get("/{producto_id}", response_model=ProductoResponse)
+@router.get(
+    "/{producto_id}",
+    response_model=ProductoResponse,
+    responses={404: {"model": ErrorResponse, "description": "Producto no encontrado"}},
+)
 def obtener_producto(
     producto_id: int,
     repo: Annotated[ProductoRepository, Depends(obtener_repositorio)],

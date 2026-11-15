@@ -66,3 +66,9 @@ def test_middleware_respeta_request_id() -> None:
     response = client.get("/health", headers={"x-request-id": "abc-123"})
 
     assert response.headers["x-request-id"] == "abc-123"
+
+
+def test_openapi_documenta_404() -> None:
+    responses = app.openapi()["paths"]["/products/{producto_id}"]["get"]["responses"]
+
+    assert "404" in responses
