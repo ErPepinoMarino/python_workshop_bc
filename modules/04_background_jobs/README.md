@@ -2,7 +2,7 @@
 
 Módulo 4 del bootcamp: cola de trabajos distribuida con Redis, worker asíncrono, reintentos, idempotencia y dead-letter queue.
 
-**Estado:** documento de diseño cerrado. La implementación (M4.01 en adelante) aún no existe; este README se completará con comandos, estructura y pruebas cuando el módulo funcione.
+**Estado:** M4.01–M4.02 cerrados. Proyecto creado, configuración por entorno validada y conectividad con Redis comprobada por test. En curso: worker, reintentos, idempotencia y DLQ.
 
 ## Qué es y qué no es
 
@@ -14,6 +14,107 @@ Límites deliberados:
 - **No usa PostgreSQL.** El módulo es autónomo y su única infraestructura es Redis. El "pedido" y el "proveedor de pagos" son **simulados** dentro del módulo; lo que es real son las garantías: entrega, reintentos, idempotencia y fallo definitivo.
 - **No usa Celery.** El comando del curso fija ARQ, y no se instalan dos gestores de colas a la vez.
 - No hay frontend ni autenticación.
+
+## Requisitos
+
+- Python 3.12 o posterior; el entorno local usa `.python-version` (3.14).
+- [uv](https://docs.astral.sh/uv/).
+- Docker con el daemon iniciado.
+
+## Puesta en marcha
+
+1. Crea la configuración local a partir del ejemplo:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+2. Levanta Redis 7 y comprueba que responde:
+
+   ```powershell
+   docker run --name bootcamp-redis -p 127.0.0.1:6379:6379 -d redis:7-alpine
+   docker exec -it bootcamp-redis redis-cli ping
+   ```
+
+   Debe imprimir `PONG`. El bind a `127.0.0.1` evita publicar Redis en la red local; el contenedor no usa contraseña porque solo escucha en loopback.
+
+3. Instala dependencias y verifica la configuración:
+
+   ```powershell
+   uv sync --locked
+   uv run python -c "from background_jobs.config import get_settings; s = get_settings(); print(s.host, s.port, s.database)"
+   ```
+
+   Debe imprimir `127.0.0.1 6379 0`.
+
+4. Ejecuta las pruebas:
+
+   ```powershell
+   uv run pytest tests/ -q
+   ```
+
+   Debe imprimir `1 passed`. **El test requiere Redis arrancado**: si no lo está, falla, y es correcto que falle porque el módulo no es operativo sin broker.
+
+## Estructura
+
+```
+modules/04_background_jobs/
+├── src/background_jobs/
+│   ├── __init__.py
+│   └── config.py          # Settings desde entorno, validado con Pydantic
+├── tests/
+│   └── test_redis.py      # integración: PING por el pool de ARQ
+├── .env.example
+├── pyproject.toml
+└── uv.lock
+```
+
+## Configuración
+
+| Variable | Campo | Por defecto | Validación |
+|---|---|---|---|
+| `REDIS_HOST` | `host` | `127.0.0.1` | texto |
+| `REDIS_PORT` | `port` | `6379` | entero entre 1 y 65535 |
+| `REDIS_DATABASE` | `database` | `0` | entero >= 0 |
+
+- La configuración se lee del entorno y de `.env`; `env_prefix="REDIS_"` evita colisiones.
+- `port` se valida en **runtime**: un `REDIS_PORT=99999` produce un `ValidationError` que nombra el campo antes de abrir ningún socket.
+- `get_settings()` está memoizado con `lru_cache`: el entorno se lee una vez por proceso y se comparte la misma instancia. En tests que cambien variables de entorno hay que llamar a `get_settings.cache_clear()`.
+- `database` es el **índice** de base lógica de Redis, no "sin base de datos". Las pruebas locales podrán usar la `1` para no mezclar claves con desarrollo; en CI se usará un contenedor dedicado.
+
+## Uso
+
+```python
+import asyncio
+
+from arq import create_pool
+
+from background_jobs.config import get_settings
+
+
+async def main() -> None:
+    pool = await create_pool(get_settings().to_arq())
+    try:
+        print(await pool.ping())
+    finally:
+        await pool.aclose()
+
+
+asyncio.run(main())
+```
+
+`to_arq()` traduce `Settings` al tipo que espera ARQ. `create_pool()` devuelve un `ArqRedis`, que hereda de `redis.asyncio.Redis`: el mismo pool sirve para encolar y para leer y escribir claves.
+
+## Calidad
+
+```powershell
+uv run ruff check .
+uv run mypy
+uv run pytest tests/ -q
+```
+
+- `mypy` en modo `strict` sobre `src` y `tests`.
+- El test es de **integración**: valida la conexión real, no un doble.
 
 ## Conceptos que este módulo demuestra
 
@@ -59,7 +160,6 @@ Límites deliberados:
 | Clave en el proveedor | >= 24 h |
 
 Si un job lleva tres días en la DLQ y se relanza con la misma `order_id`, el proveedor ya olvidó la clave y **cobraría otra vez**. Por eso: reintentos acotados, alerta en la DLQ y, al hacer replay, subir `version` o verificar contra el proveedor antes de relanzar.
-
 
 ## Máquina de estados
 
@@ -128,6 +228,7 @@ En M4 **no se implementa**; se documenta qué se compararía, con qué frecuenci
 | `max_jobs=1` al empezar | `max_jobs=10` | Razonar sin concurrencia y demostrar el bloqueo después |
 | Corrutinas en un proceso | Proceso por job | El trabajo del módulo es E/S; menos memoria y conexiones. Para CPU se usará `ProcessPoolExecutor` |
 | DLQ en Redis | DLQ en PostgreSQL | Autonomía del módulo: una sola infraestructura |
+| `pydantic-settings` | `os.getenv` suelto | Validación en el borde y un único punto de configuración |
 
 ## Riesgos conocidos
 
@@ -135,24 +236,25 @@ En M4 **no se implementa**; se documenta qué se compararía, con qué frecuenci
 |---|---|---|
 | Llamada bloqueante dentro de un job | Congela todas las tareas del worker | Disciplina async, `job_timeout`, demo explícita |
 | Crash nativo / OOM | Muere el worker y los jobs en curso | Reintento tras lease vencido; varios contenedores |
-| `pickle` por defecto | Deserializar un payload manipulado ejecuta código | Redis privado con contraseña; serializador alternativo documentado |
-| Redis sin persistencia | Se pierde la cola al reiniciar | Configurar AOF en el contenedor de desarrollo |
+| `pickle` por defecto | Deserializar un payload manipulado ejecuta código | Redis privado, sin exposición de red, serializador alternativo documentado |
+| Redis sin persistencia | Se pierde la cola al reiniciar | Datos efímeros por diseño en desarrollo; AOF y volumen en producción |
 | Duplicados por at-least-once | Efectos repetidos | Clave de idempotencia + `UNIQUE` en efectos internos |
 
-## Comandos previstos
+## Comandos
 
 ```powershell
-# Redis de desarrollo (puerto 6379, sin contraseña: solo local)
-docker run --name bootcamp-redis -p 6379:6379 -d redis:7-alpine
+# Redis de desarrollo (solo loopback, sin contraseña)
+docker run --name bootcamp-redis -p 127.0.0.1:6379:6379 -d redis:7-alpine
 
-# Worker
+# Comprobaciones del módulo
+uv run ruff check .
+uv run mypy
+uv run pytest tests/ -q
+
+# Pendientes de implementación (M4.05+)
 uv run arq worker.WorkerSettings
-
-# Productor
 uv run python scripts/producer.py
-
-# Pruebas
-uv run pytest tests/
+uv run python scripts/dlq.py list
 ```
 
 ## Glosario
