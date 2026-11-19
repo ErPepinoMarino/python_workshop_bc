@@ -2,7 +2,7 @@
 
 Módulo 4 del bootcamp: cola de trabajos distribuida con Redis, worker asíncrono, reintentos, idempotencia y dead-letter queue.
 
-**Estado:** M4.01–M4.02 cerrados. Proyecto creado, configuración por entorno validada y conectividad con Redis comprobada por test. En curso: worker, reintentos, idempotencia y DLQ.
+**Estado:** M4.01–M4.02 y M4.05–M4.07 cerrados. Proyecto, configuración validada, conectividad con Redis, worker con ciclo de vida y primer job encolado y ejecutado. En curso: política de errores, reintentos, idempotencia y DLQ.
 
 ## Qué es y qué no es
 
@@ -61,8 +61,13 @@ Límites deliberados:
 modules/04_background_jobs/
 ├── src/background_jobs/
 │   ├── __init__.py
-│   └── config.py          # Settings desde entorno, validado con Pydantic
+│   ├── config.py          # Settings desde entorno, validado con Pydantic
+│   ├── producer.py        # encolar_suma(pool, a, b)
+│   └── worker.py          # jobs, ciclo de vida y WorkerSettings
+├── scripts/
+│   └── demo_loop.py       # comparación time.sleep / asyncio.sleep
 ├── tests/
+│   ├── test_producer.py   # encolado real contra Redis (base 1)
 │   └── test_redis.py      # integración: PING por el pool de ARQ
 ├── .env.example
 ├── pyproject.toml
@@ -113,8 +118,8 @@ uv run mypy
 uv run pytest tests/ -q
 ```
 
-- `mypy` en modo `strict` sobre `src` y `tests`.
-- El test es de **integración**: valida la conexión real, no un doble.
+- `mypy` en modo `strict` sobre `src`, `tests` y `scripts`.
+- Los tests son de **integración**: validan Redis real, no dobles. El del productor fuerza `REDIS_DATABASE=1` y vacía esa base con `flushdb()` para aislarse de desarrollo.
 
 ## Conceptos que este módulo demuestra
 
@@ -223,6 +228,7 @@ En M4 **no se implementa**; se documenta qué se compararía, con qué frecuenci
 | Decisión | Alternativa descartada | Motivo |
 |---|---|---|
 | ARQ | Celery | Comando del curso; asyncio nativo; no duplicar infraestructura |
+| ARQ (en mantenimiento desde 2026) | Librería mantenida activamente | Aceptado por el alcance del curso: código pequeño e inspeccionable. No es una recomendación general para producción |
 | ARQ | RQ, Dramatiq, TaskIQ | Misma razón; se documentan como opciones reales en producción |
 | Redis como broker | RabbitMQ, SQS | Un solo servicio, ya disponible en Docker, suficiente para el alcance |
 | `max_jobs=1` al empezar | `max_jobs=10` | Razonar sin concurrencia y demostrar el bloqueo después |
@@ -239,6 +245,7 @@ En M4 **no se implementa**; se documenta qué se compararía, con qué frecuenci
 | `pickle` por defecto | Deserializar un payload manipulado ejecuta código | Redis privado, sin exposición de red, serializador alternativo documentado |
 | Redis sin persistencia | Se pierde la cola al reiniciar | Datos efímeros por diseño en desarrollo; AOF y volumen en producción |
 | Duplicados por at-least-once | Efectos repetidos | Clave de idempotencia + `UNIQUE` en efectos internos |
+| ARQ 0.28 llama a `redis.close()`, deprecado desde redis 5.0.1 | Aviso en cada cierre de worker; rotura si redis elimina el alias | Filtrado en pytest solo para `arq.worker`; revisar al actualizar ARQ |
 
 ## Comandos
 
@@ -251,11 +258,17 @@ uv run ruff check .
 uv run mypy
 uv run pytest tests/ -q
 
-# Pendientes de implementación (M4.05+)
-uv run arq worker.WorkerSettings
-uv run python scripts/producer.py
-uv run python scripts/dlq.py list
+# Worker (desde modules/04_background_jobs)
+uv run arq background_jobs.worker.WorkerSettings
+
+# Health check (con el worker vivo, en otra terminal)
+uv run arq --check background_jobs.worker.WorkerSettings
+
+# Demo del event loop: bloqueante, mixta y asíncrona
+uv run python scripts/demo_loop.py
 ```
+
+`encolar_suma(pool, a, b)` vive en el paquete y recibe el pool desde fuera: quien llama posee el ciclo de vida de la conexión. En M5 lo importará la API.
 
 ## Glosario
 
