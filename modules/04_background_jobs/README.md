@@ -201,6 +201,8 @@ pending ──claim atómico──> processing ──éxito──> completed
 
 Regla: **la deduplicación vive en el sistema que produce el efecto**, no en el worker.
 
+Implementado en `proveedor.py`: `HSETNX` sobre el hash `proveedor:cargos` registra un cargo por `order_id` y devuelve el mismo resultado si se repite; si el importe no coincide, falla. La clave la deriva `identidad.order_id`. `tests/test_idempotencia.py` reproduce el caso ambiguo: cargo registrado, respuesta perdida, reintento del worker y un único cargo al final.
+
 - **Efecto interno** (misma base de datos): una transacción + restricción `UNIQUE`. No hay ventana de ambigüedad.
 - **Efecto externo** (proveedor): `idempotency_key` que **viaja en la petición**. Si el receptor no coopera, no hay garantía; solo mitigaciones.
 - **Receptor sin soporte** (correo): se elige explícitamente entre riesgo de duplicado y riesgo de pérdida, se documenta elección y coste, y se registra el intento para reconciliar.
