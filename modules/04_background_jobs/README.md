@@ -62,13 +62,23 @@ modules/04_background_jobs/
 ├── src/background_jobs/
 │   ├── __init__.py
 │   ├── config.py          # Settings desde entorno, validado con Pydantic
+│   ├── dlq.py             # dead-letter queue y envoltorio con_dlq
+│   ├── identidad.py       # order_id: pedido + operación + versión
 │   ├── producer.py        # encolar_suma(pool, a, b)
+│   ├── proveedor.py       # proveedor de pagos idempotente (HSETNX)
 │   └── worker.py          # jobs, ciclo de vida y WorkerSettings
 ├── scripts/
-│   └── demo_loop.py       # comparación time.sleep / asyncio.sleep
+│   ├── demo_loop.py       # comparación time.sleep / asyncio.sleep
+│   └── dlq_cli.py         # listar y reencolar entradas de la DLQ
 ├── tests/
-│   ├── test_producer.py   # encolado real contra Redis (base 1)
-│   └── test_redis.py      # integración: PING por el pool de ARQ
+│   ├── conftest.py        # fixture pool aislado en la base 1
+│   ├── test_bloqueo.py    # time.sleep frente a await dentro del worker
+│   ├── test_dlq.py        # fallo definitivo y reintentos agotados
+│   ├── test_errores.py    # clasificación transitorio/permanente
+│   ├── test_idempotencia.py
+│   ├── test_identidad.py
+│   ├── test_producer.py
+│   └── test_redis.py
 ├── .env.example
 ├── pyproject.toml
 └── uv.lock
@@ -201,6 +211,8 @@ pending ──claim atómico──> processing ──éxito──> completed
 
 Regla: **la deduplicación vive en el sistema que produce el efecto**, no en el worker.
 
+Implementado en `proveedor.py`: `HSETNX` sobre el hash `proveedor:cargos` registra un cargo por `order_id` y devuelve el mismo resultado si se repite; si el importe no coincide, falla. La clave la deriva `identidad.order_id`. `tests/test_idempotencia.py` reproduce el caso ambiguo: cargo registrado, respuesta perdida, reintento del worker y un único cargo al final.
+
 - **Efecto interno** (misma base de datos): una transacción + restricción `UNIQUE`. No hay ventana de ambigüedad.
 - **Efecto externo** (proveedor): `idempotency_key` que **viaja en la petición**. Si el receptor no coopera, no hay garantía; solo mitigaciones.
 - **Receptor sin soporte** (correo): se elige explícitamente entre riesgo de duplicado y riesgo de pérdida, se documenta elección y coste, y se registra el intento para reconciliar.
@@ -210,9 +222,11 @@ Regla: **la deduplicación vive en el sistema que produce el efecto**, no en el 
 
 ARQ **no** la provee. Se implementa propia, en Redis, para no añadir infraestructura al módulo:
 
-- Clave `arq:dead` con el payload original, el nombre de la función, el número de intentos, el tipo y mensaje de error y los timestamps.
-- Script `scripts/dlq.py` con dos operaciones: **listar** y **replay** (reencolar tras corregir la causa).
-- Retención acotada. Una DLQ sin límite es una fuga de memoria; una DLQ que nadie mira es un cementerio.
+- **Lista** `arq:dead`, no hash: un elemento por job fallido, el más reciente primero (`LPUSH`). Cada elemento es **JSON legible**, no `pickle`: la DLQ la lee una persona o un script, y deserializar `pickle` ejecuta código.
+- **Entrada**: función, `job_id`, `job_try`, error con su tipo, argumentos y momento en UTC.
+- **Tamaño acotado** a 1000 entradas con `LTRIM`. Sin cota, la DLQ crece hasta llenar Redis.
+- **El registro lo hace el envoltorio `con_dlq`**, no un hook: el camino de `max_tries` de ARQ (`finish_failed_job`) no pasa por `after_job_end`, así que un hook perdería justo el caso más importante. El envoltorio registra un fallo permanente al primer intento y un transitorio solo en el último permitido.
+- **`scripts/dlq_cli.py`** con dos operaciones: `list` y `replay <indice>`. El replay reencola y **extrae** la entrada; requiere que el worker conozca esa función, así que se despliega el arreglo antes de reencolar.
 - Alerta: la existencia de entradas en la DLQ es un incidente operativo, no ruido.
 
 Trade-off documentado: en un sistema con datos de negocio (M5), la DLQ se movería a un almacén consultable con SQL. Aquí se prioriza la autonomía del módulo.
@@ -266,6 +280,10 @@ uv run arq --check background_jobs.worker.WorkerSettings
 
 # Demo del event loop: bloqueante, mixta y asíncrona
 uv run python scripts/demo_loop.py
+
+# DLQ: listar y reencolar (la base 1 es la de los tests)
+$env:REDIS_DATABASE="1"; uv run python scripts/dlq_cli.py list
+uv run python scripts/dlq_cli.py replay 0
 ```
 
 `encolar_suma(pool, a, b)` vive en el paquete y recibe el pool desde fuera: quien llama posee el ciclo de vida de la conexión. En M5 lo importará la API.
