@@ -111,6 +111,7 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: bootcamp
+          POSTGRES_DB: integrated
         ports:
           - 5433:5432
         options: >-
