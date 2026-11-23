@@ -70,6 +70,7 @@ Se leen desde `.env` o desde el entorno. Valores por defecto:
 | `REDIS_PORT` | `6379` | Puerto de Redis |
 | `REDIS_DATABASE` | `0` | Base de datos de Redis |
 | `API_BASE_URL` | `http://127.0.0.1:8010` | URL de la API para el CLI |
+| `LOG_FORMAT` | `console` | `console` o `json`; `json` en producción para agregar parsers |
 
 ## Migraciones
 
@@ -86,11 +87,34 @@ uv run uvicorn integrated_app.main:app --host 127.0.0.1 --port 8010 --reload
 Swagger UI: `http://127.0.0.1:8010/docs`
 
 Health: `http://127.0.0.1:8010/health`
+Readiness: `http://127.0.0.1:8010/ready` (comprueba PostgreSQL y Redis)
 
 ## Ejecutar el worker
 
 ```bash
 uv run arq integrated_app.worker.WorkerSettings
+```
+
+## Docker Compose
+
+Levanta toda la pila (PostgreSQL, Redis, API y worker) desde la raíz del repo:
+
+```bash
+docker compose -f modules/05_integrated_app/docker-compose.yml up --build -d
+```
+
+Servicios expuestos:
+
+- API: `http://127.0.0.1:8020`
+- PostgreSQL: puerto interno `5432` del contenedor
+- Redis: puerto interno `6379` del contenedor
+
+El contenedor de la API aplica las migraciones de Alembic antes de arrancar Uvicorn. Tanto la API como el worker esperan a que Postgres y Redis estén healthy gracias a `depends_on` con condición.
+
+Para parar:
+
+```bash
+docker compose -f modules/05_integrated_app/docker-compose.yml down -v
 ```
 
 ## CLI interactiva
@@ -163,6 +187,25 @@ Ejemplo:
 - `tipo` distingue compra de borrado.
 - `operacion_id` es un UUID nuevo para cada operación real.
 - En “doble compra” o “doble borrado” se reutiliza el mismo `operacion_id`, por lo que el worker ejecuta ambos jobs pero la base de datos solo registra uno.
+
+## Tests de integración con Docker Compose
+
+Requieren Docker y levantan el stack completo en el puerto `8020`:
+
+```bash
+cd modules/05_integrated_app
+$env:RUN_INTEGRATION_TESTS="1"  # Windows
+# export RUN_INTEGRATION_TESTS=1  # Linux/macOS
+uv run pytest tests_e2e/ -q
+```
+
+Se pueden ejecutar manualmente también desde la raíz del repo:
+
+```bash
+docker compose -f modules/05_integrated_app/docker-compose.yml up --build -d
+curl -f http://127.0.0.1:8020/ready
+docker compose -f modules/05_integrated_app/docker-compose.yml down -v
+```
 
 ## Tests
 
