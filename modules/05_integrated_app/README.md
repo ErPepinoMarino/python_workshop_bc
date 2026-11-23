@@ -93,6 +93,28 @@ Health: `http://127.0.0.1:8010/health`
 uv run arq integrated_app.worker.WorkerSettings
 ```
 
+## Docker Compose
+
+Levanta toda la pila (PostgreSQL, Redis, API y worker) desde la raíz del repo:
+
+```bash
+docker compose -f modules/05_integrated_app/docker-compose.yml up --build -d
+```
+
+Servicios expuestos:
+
+- API: `http://127.0.0.1:8010`
+- PostgreSQL: puerto interno `5432` del contenedor
+- Redis: puerto interno `6379` del contenedor
+
+El contenedor de la API aplica las migraciones de Alembic antes de arrancar Uvicorn. Tanto la API como el worker esperan a que Postgres y Redis estén healthy gracias a `depends_on` con condición.
+
+Para parar:
+
+```bash
+docker compose -f modules/05_integrated_app/docker-compose.yml down -v
+```
+
 ## CLI interactiva
 
 ```bash

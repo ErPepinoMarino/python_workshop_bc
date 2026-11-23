@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: bootcamp
+      POSTGRES_DB: integrated
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - integrated
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d integrated"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - integrated
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: modules/05_integrated_app/Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:bootcamp@postgres:5432/integrated
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 0
+    ports:
+      - "8010:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - integrated
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: modules/05_integrated_app/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:bootcamp@postgres:5432/integrated
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - integrated
+
+volumes:
+  postgres_data:
+
+networks:
+  integrated:

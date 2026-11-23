@@ -1,0 +1,28 @@
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+
+# Forzar que el venv se cree en la misma ruta que tendrá en runtime,
+# así los shebangs de los scripts apuntan al intérprete correcto.
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv
+
+WORKDIR /deps/05_integrated_app
+
+# Copiar la dependencia editable para que resuelva la ruta ../04_background_jobs
+COPY modules/04_background_jobs /deps/04_background_jobs
+COPY modules/05_integrated_app/pyproject.toml modules/05_integrated_app/uv.lock ./
+
+RUN uv sync --frozen --no-install-project --no-dev
+
+COPY modules/05_integrated_app /deps/05_integrated_app
+RUN uv sync --frozen --no-dev --no-editable
+
+FROM python:3.14-slim-bookworm AS runtime
+
+WORKDIR /app
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY --from=builder /app/.venv /app/.venv
+
+CMD ["arq", "integrated_app.worker.WorkerSettings"]
