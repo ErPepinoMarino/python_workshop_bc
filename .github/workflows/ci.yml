@@ -102,3 +102,49 @@ jobs:
         run: uv run mypy
       - name: Tests
         run: uv run pytest tests/ -q
+
+  integrated_app:
+    name: modules/05_integrated_app
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: bootcamp
+          POSTGRES_DB: integrated
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:bootcamp@127.0.0.1:5433/integrated
+    defaults:
+      run:
+        working-directory: modules/05_integrated_app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Sync dependencies
+        run: uv sync --locked
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy
+      - name: Tests
+        run: uv run pytest tests/ -q
