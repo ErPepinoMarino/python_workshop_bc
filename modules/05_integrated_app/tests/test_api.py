@@ -27,6 +27,20 @@ def test_health(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_ready(client: TestClient) -> None:
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_correlation_id_se_propaga(client: TestClient) -> None:
+    response = client.get("/health", headers={"x-correlation-id": "abc123"})
+
+    assert response.status_code == 200
+    assert response.headers["x-correlation-id"] == "abc123"
+
+
 def test_crear_y_listar_productos(client: TestClient) -> None:
     response = client.post(
         "/products",

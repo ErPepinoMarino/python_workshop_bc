@@ -34,7 +34,7 @@ services:
       REDIS_PORT: 6379
       REDIS_DATABASE: 0
     ports:
-      - "8010:8000"
+      - "8020:8000"
     depends_on:
       postgres:
         condition: service_healthy

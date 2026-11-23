@@ -2,11 +2,14 @@ from collections.abc import Sequence
 from decimal import Decimal
 from uuid import uuid4
 
+import structlog
 from arq.connections import ArqRedis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrated_app.models import Producto
 from integrated_app.repositories import CompraRepository, ProductoRepository
+
+logger = structlog.get_logger()
 
 
 class ProductoNoEncontradoError(Exception):
@@ -53,6 +56,11 @@ class ProductoService:
             tipo=tipo,
             marca=marca,
         )
+        logger.info(
+            "producto_creado",
+            producto_id=producto.id,
+            nombre=producto.nombre,
+        )
         return producto
 
     async def listar(self) -> Sequence[Producto]:
@@ -94,5 +102,11 @@ class ProductoService:
             producto_id,
             str(importe),
             order_id,
+        )
+        logger.info(
+            "compra_encolada",
+            producto_id=producto_id,
+            order_id=order_id,
+            importe=str(importe),
         )
         return order_id

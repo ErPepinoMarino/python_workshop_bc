@@ -103,7 +103,7 @@ docker compose -f modules/05_integrated_app/docker-compose.yml up --build -d
 
 Servicios expuestos:
 
-- API: `http://127.0.0.1:8010`
+- API: `http://127.0.0.1:8020`
 - PostgreSQL: puerto interno `5432` del contenedor
 - Redis: puerto interno `6379` del contenedor
 
