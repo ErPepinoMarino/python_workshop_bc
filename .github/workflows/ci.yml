@@ -170,7 +170,7 @@ jobs:
         working-directory: modules/05_integrated_app
         env:
           RUN_INTEGRATION_TESTS: "1"
-        run: uv run pytest tests/test_integration.py -q
+        run: uv run pytest tests_e2e/ -q
       - name: Docker Compose down
         if: always()
         run: docker compose -f modules/05_integrated_app/docker-compose.yml down -v

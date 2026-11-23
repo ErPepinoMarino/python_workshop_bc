@@ -196,7 +196,7 @@ Requieren Docker y levantan el stack completo en el puerto `8020`:
 cd modules/05_integrated_app
 $env:RUN_INTEGRATION_TESTS="1"  # Windows
 # export RUN_INTEGRATION_TESTS=1  # Linux/macOS
-uv run pytest tests/test_integration.py -q
+uv run pytest tests_e2e/ -q
 ```
 
 Se pueden ejecutar manualmente también desde la raíz del repo:
